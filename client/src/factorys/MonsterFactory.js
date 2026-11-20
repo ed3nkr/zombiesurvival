@@ -1,0 +1,101 @@
+import Monster from "../characters/Monster.js";
+import getRandomMonsterByChance from "../utils/Random.js";
+
+export default class MonsterFactory {
+  constructor(scene) {
+    this.scene = scene;
+
+    this.monsters = this.scene.physics.add.group({
+      classType: Monster,
+      runChildUpdate: true,
+      maxSize: -1, // ⭐️ 그룹의 최대 크기 제한을 해제합니다.
+    });
+
+    // 몬스터끼리 충돌하도록 설정합니다.
+    this.scene.physics.add.collider(this.monsters, this.monsters);
+  }
+
+  spawnMonster() {
+    const player = this.scene.player;
+    const cam = this.scene.cameras.main;
+
+    // 플레이어 위치를 기준으로 동적으로 생성 영역을 계산합니다.
+    const outerRectangle = new Phaser.Geom.Rectangle(
+      player.x - cam.width / 2 - 100,
+      player.y - cam.height / 2 - 100,
+      cam.width + 200,
+      cam.height + 200
+    );
+    const innerRectangle = new Phaser.Geom.Rectangle(
+      player.x - cam.width / 2,
+      player.y - cam.height / 2,
+      cam.width,
+      cam.height
+    );
+
+    const spawnPoint = Phaser.Geom.Rectangle.RandomOutside(
+      outerRectangle,
+      innerRectangle
+    );
+
+    const monsters = this.scene.gameData.gameDataSet.monsters;
+    const selectedMonster = getRandomMonsterByChance(monsters);
+
+    const monsterType = selectedMonster.id;
+    const monsterInfo = selectedMonster;
+
+    const monster = this.monsters.get(
+      spawnPoint.x,
+      spawnPoint.y,
+      `monster${monsterType}`,
+      monsterType,
+      monsterInfo.hp,
+      monsterInfo.atk,
+      monsterInfo.def,
+      monsterInfo.speed,
+      monsterInfo.drop_item_id
+    );
+
+    // 2. ⭐️ 몬스터를 성공적으로 가져왔다면, 즉시 활성화하고 보이게 만듭니다.
+    if (monster) {
+      // 객체가 재사용될 수 있으므로 항상 값 초기화!
+      monster.hp = monsterInfo.hp;
+      monster.atk = monsterInfo.atk;
+      monster.def = monsterInfo.def;
+      monster.speed = monsterInfo.speed;
+      monster.drop_item_id = monsterInfo.drop_item_id;
+      monster.setActive(true);
+      monster.setVisible(true);
+      monster.body.enable = true;
+    }
+  }
+
+  removeMonster(monster) {
+    monster.body.enable = false;
+    monster.setActive(false);
+    monster.setVisible(false);
+  }
+
+  startEvent(delay = 1000) {
+    // minSpawnDelay 값 가져오기 (예: gameConfig.stage.minSpawnDelay)
+    const minSpawnDelay =
+      this.scene.gameData.gameConfig.stage.minSpawnDelay || 300;
+    const finalDelay = Math.max(delay, minSpawnDelay);
+
+    this.spawnEvent = this.scene.time.addEvent({
+      delay: finalDelay,
+      loop: true,
+      callback: () => {
+        // 플레이어 주변의 화면 바깥 영역에 몬스터를 생성합니다.
+        this.spawnMonster();
+      },
+    });
+  }
+
+  stopEvent() {
+    if (this.spawnEvent) {
+      this.spawnEvent.remove();
+      this.spawnEvent = null; // 참조를 제거합니다.
+    }
+  }
+}
